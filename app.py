@@ -1,50 +1,47 @@
 import logging
-from flask import Flask, request, send_file, render_template, redirect, url_for
+from flask import Flask, request, send_file, render_template
 import requests
 from urllib.parse import unquote_plus
 import io
-import time
-import secrets
 import os
+import psycopg2
+from datetime import datetime
+from psycopg2.extras import DictCursor
 
 app = Flask(__name__)
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 
-# In-memory token storage (replace with a database in production)
-valid_tokens = {}
+# PostgreSQL connection string
+DATABASE_URL = os.environ['postgresql://tokens_q0zt_user:NaKCtK3QIJGNL3D4dVpcJuxA0q3ZfigA@dpg-cr8q3156l47c73bnbbqg-a.oregon-postgres.render.com/tokens_q0zt']
 
-def generate_token(user_id):
-    token = secrets.token_urlsafe()
-    valid_tokens[token] = {'user_id': user_id, 'timestamp': time.time()}
-    logging.debug(f"Generated token: {token} for user: {user_id}")
-    return token
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 def verify_token(token):
     logging.debug(f"Verifying token: {token}")
-    if token in valid_tokens:
-        token_data = valid_tokens[token]
-        current_time = time.time()
-        token_age = current_time - token_data['timestamp']
-        logging.debug(f"Token age: {token_age} seconds")
-        if token_age < 3600:  # 1 hour expiration
-            return True
+    conn = get_db_connection()
+    with conn.cursor(cursor_factory=DictCursor) as cur:
+        cur.execute("SELECT expiry FROM tokens WHERE token = %s", (token,))
+        result = cur.fetchone()
+        if result:
+            expiry = result['expiry']
+            if expiry > datetime.now():
+                logging.debug(f"Token {token} verified successfully")
+                return True
+            else:
+                cur.execute("DELETE FROM tokens WHERE token = %s", (token,))
+                conn.commit()
+                logging.debug(f"Token {token} expired and deleted")
         else:
-            logging.debug(f"Token expired. Age: {token_age} seconds")
-            del valid_tokens[token]
-    else:
-        logging.debug("Token not found in valid_tokens")
+            logging.debug(f"Token {token} not found in database")
+    conn.close()
     return False
 
 @app.route('/')
 def home():
     return "Welcome to the PDF handler application!"
-
-@app.route('/generate_token/<user_id>')
-def generate_token_route(user_id):
-    token = generate_token(user_id)
-    return f"Generated token: {token}"
 
 @app.route('/pdf')
 def handle_pdf():
@@ -68,7 +65,7 @@ def handle_pdf():
                 io.BytesIO(response.content),
                 mimetype='application/pdf',
                 as_attachment=True,
-                download_name='document.pdf'  # Changed from attachment_filename
+                download_name='document.pdf'
             )
         except requests.RequestException as e:
             logging.error(f"Error downloading PDF: {str(e)}")
