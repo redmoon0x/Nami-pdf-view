@@ -29,7 +29,9 @@ def verify_token(token):
     return False
 
 # Use this in your route
-
+@app.route('/')
+def home():
+    return "Welcome to the PDF handler application!"
 
 @app.route('/pdf')
 def handle_pdf():
