@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import psycopg2
 from datetime import datetime
 from psycopg2.extras import DictCursor
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 
