@@ -51,15 +51,15 @@ def handle_pdf():
     url = unquote_plus(request.args.get('url', ''))
     token = request.args.get('token', '')
     action = request.args.get('action', 'view')
-    
+
     logging.debug(f"Received request - URL: {url}, Token: {token}, Action: {action}")
-    
+
     if not url or not token:
         return "Missing URL or token", 400
-    
+
     if not verify_token(token):
         return "Invalid or expired token", 403
-    
+
     if action == 'download':
         try:
             response = requests.get(url, stream=True)
@@ -74,7 +74,12 @@ def handle_pdf():
             logging.error(f"Error downloading PDF: {str(e)}")
             return f"Error downloading PDF: {str(e)}", 500
     else:
-        return render_template('index.html', pdf_url=url, token=token)
+        try:
+            return render_template('index.html', pdf_url=url, token=token)
+        except Exception as e:
+            logging.error(f"Error rendering template: {str(e)}")
+            return f"Error rendering template: {str(e)}", 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)
